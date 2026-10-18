@@ -34,9 +34,19 @@ return new class extends Migration
             $table->unsignedSmallInteger('legacy_wilaya_id')->index();
             $table->string('name');
             $table->string('name_ar');
+            $table->char('postal_code', 5)->nullable()->index();
 
             $table->foreign('daira_id')->references('id')->on($tables['dairas'])->cascadeOnDelete();
             $table->foreign('wilaya_id')->references('id')->on($tables['wilayas'])->cascadeOnDelete();
+        });
+
+        Schema::create($tables['postal_codes'], function (Blueprint $table) use ($tables) {
+            $table->char('code', 5)->primary();
+            $table->unsignedSmallInteger('commune_id')->index();
+            $table->string('name');
+            $table->string('name_ar');
+
+            $table->foreign('commune_id')->references('id')->on($tables['communes'])->cascadeOnDelete();
         });
     }
 
@@ -44,6 +54,7 @@ return new class extends Migration
     {
         $tables = config('algeria.tables');
 
+        Schema::dropIfExists($tables['postal_codes']);
         Schema::dropIfExists($tables['communes']);
         Schema::dropIfExists($tables['dairas']);
         Schema::dropIfExists($tables['wilayas']);

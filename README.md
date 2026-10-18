@@ -7,9 +7,10 @@
 | **2026** (القانون 26-06 والمرسوم الرئاسي 26-206) — الافتراضي | 69 | 549 | 1541 |
 | 2019 (القانون 19-12) | 58 | 548 | 1541 |
 
-- Migrations + Seeder + Eloquent Models (`Wilaya`, `Daira`, `Commune`) مع العلاقات.
+- Migrations + Seeder + Eloquent Models (`Wilaya`, `Daira`, `Commune`, `PostalCode`) مع العلاقات.
+- **الرموز البريدية**: الرمز البريدي الرئيسي لكل بلدية، وجدول بـ 3752 رمزًا بريديًا (مكتب بريد) مرتبطة ببلدياتها.
 - Facade `Algeria` يعمل **بدون قاعدة بيانات** (من ملفات JSON مدمجة).
-- قواعد تحقق جاهزة: `ValidWilaya`، `ValidDaira`، `ValidCommune` (مع التحقق من الانتماء)، ورسائل بالعربية والفرنسية والإنجليزية.
+- قواعد تحقق جاهزة: `ValidWilaya`، `ValidDaira`، `ValidCommune`، `ValidPostalCode` (مع التحقق من الانتماء)، ورسائل بالعربية والفرنسية والإنجليزية.
 - API JSON اختياري للقوائم المتسلسلة (ولاية ← دائرة ← بلدية).
 - بحث يتجاهل الحالة والتشكيل والهمزات (`بجاية` = `Béjaïa` = `bejaia`).
 - دعم التقسيمين 58 و69، و**أرقام البلديات ثابتة في كليهما**، فبياناتك المخزّنة بـ `commune_id` لا تتأثر عند الانتقال.
@@ -63,6 +64,7 @@ php artisan algeria:install
     'wilayas' => 'wilayas',
     'dairas' => 'dairas',
     'communes' => 'communes',
+    'postal_codes' => 'postal_codes',
 ],
 
 'routes' => [
@@ -89,7 +91,9 @@ php artisan algeria:seed --division=69
 
 **dairas**: `id`، `wilaya_id`، `name`، `name_ar`
 
-**communes**: `id`، `daira_id`، `wilaya_id`، `legacy_wilaya_id` (الولاية في تقسيم 58)، `name`، `name_ar`
+**communes**: `id`، `daira_id`، `wilaya_id`، `legacy_wilaya_id` (الولاية في تقسيم 58)، `name`، `name_ar`، `postal_code` (الرمز البريدي الرئيسي، قد يكون `null`)
+
+**postal_codes**: `code` (مفتاح أساسي، 5 أرقام مثل `"16000"`)، `commune_id`، `name`، `name_ar` (اسم مكتب البريد)
 
 ---
 
@@ -113,6 +117,17 @@ Wilaya::orderByName()->get();             // ترتيب حسب لغة التطب
 
 app()->setLocale('ar');
 $wilaya->localized_name;                  // "بوسعادة"  (و"Bou Saâda" في باقي اللغات)
+```
+
+### الرموز البريدية
+
+```php
+use Djouamaah\Algeria\Models\PostalCode;
+
+$commune->postal_code;                       // "16000" (الرمز الرئيسي)
+$commune->postalCodes;                       // كل مكاتب البريد في البلدية
+Commune::where('postal_code', '16000')->first();
+PostalCode::find('16000')->commune->wilaya;  // من الرمز البريدي إلى البلدية والولاية
 ```
 
 ربط نموذجك:
@@ -141,6 +156,9 @@ Algeria::communes(16);              // بلديات ولاية الجزائر
 Algeria::communesOfDaira(549);      // بلديات دائرة
 Algeria::commune(1);
 Algeria::search('tizi', wilaya: 15);
+Algeria::postalCode('16000');           // ['code' => '16000', 'commune_id' => ..., 'name' => 'Alger', ...]
+Algeria::communeByPostalCode('16000');  // بلدية الجزائر الوسطى
+Algeria::postalCodes($communeId);       // رموز بلدية معيّنة
 Algeria::withDivision(58)->wilayas();  // التقسيم القديم
 ```
 
@@ -150,11 +168,13 @@ Algeria::withDivision(58)->wilayas();  // التقسيم القديم
 use Djouamaah\Algeria\Rules\ValidWilaya;
 use Djouamaah\Algeria\Rules\ValidDaira;
 use Djouamaah\Algeria\Rules\ValidCommune;
+use Djouamaah\Algeria\Rules\ValidPostalCode;
 
 $request->validate([
     'wilaya_id'  => ['required', new ValidWilaya],
     'daira_id'   => ['required', new ValidDaira($request->wilaya_id)],
     'commune_id' => ['required', new ValidCommune(daira: $request->daira_id)],
+    'postal_code' => ['nullable', new ValidPostalCode(commune: $request->commune_id)],
 ]);
 ```
 
@@ -169,6 +189,8 @@ $request->validate([
 | `GET /api/algeria/wilayas/{wilaya}/dairas` | دوائر ولاية |
 | `GET /api/algeria/wilayas/{wilaya}/communes?q=` | بلديات ولاية (مع بحث اختياري) |
 | `GET /api/algeria/dairas/{daira}/communes` | بلديات دائرة |
+| `GET /api/algeria/communes/{commune}/postal-codes` | الرموز البريدية لبلدية |
+| `GET /api/algeria/postal-codes/{code}` | رمز بريدي مع بلديته ودائرته وولايته |
 
 مثال Blade:
 
@@ -221,6 +243,13 @@ daira.onchange = async () =>
 - الولايات 59–69: أرقامها وأسماؤها من المرسوم الرئاسي 26-206 (الجريدة الرسمية العدد 40، 2026)، وبلدياتها من قوائم القانون 26-06. كل ولاية جديدة أخذت دوائر كاملة من ولايتها الأم.
 - **استثناء:** بلديتا العريشة والقور كانتا ضمن دائرة سبدو، فوُضعتا في دائرة جديدة «العريشة» (رقم 549) ضمن الولاية 63، وبقيت سبدو في تلمسان. راجع هذا مع نص المرسوم التنفيذي للتنظيم الإداري للولايات الجديدة عند صدوره نهائيًا.
 - إعادة توزيع الدوائر داخل الولايات الجديدة بمراسيم لاحقة (إن وُجدت) غير مدرجة بعد.
+
+### الرموز البريدية
+
+- المصدر: ملف مكاتب البريد في [othmanus/algeria-cities](https://github.com/othmanus/algeria-cities) (3940 سطرًا). استُبعدت الأسطر بلا رمز، وأُعيد ربط مكاتب ربطها المصدر ببلدية تحمل الاسم نفسه في ولاية أخرى، واستُبعد ما تعذّر ربطه. بقي **3752 رمزًا**.
+- `postal_code` في البلدية هو رمز مكتب البريد الرئيسي فيها: مكتب الولاية الرئيسي (`xx000`) إن وُجد، ثم المكتب الذي يحمل اسم البلدية، ثم الأقرب اسمًا، وإلا فأصغر رمز في البلدية.
+- **1505 بلدية من 1541** لها رمز بريدي، و36 بلدية بقيمة `null` لأن المصدر لا يذكر لها أي مكتب بريد.
+- الرموز البريدية تبدأ برقم الولاية في تقسيم 1984 (48 ولاية) ولا تتغير بالتقسيم الجديد: بلديات ولاية بوسعادة (68) رموزها تبدأ بـ `28`.
 
 البيانات في `data/*.json` مولّدة بالسكربت:
 

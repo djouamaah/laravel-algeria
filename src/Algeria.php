@@ -12,13 +12,14 @@ use InvalidArgumentException;
  * Every row is a plain array:
  *  wilaya  : id, code, name, name_ar, parent_id
  *  daira   : id, wilaya_id, name, name_ar
- *  commune : id, daira_id, wilaya_id, legacy_wilaya_id, name, name_ar
+ *  commune : id, daira_id, wilaya_id, legacy_wilaya_id, name, name_ar, postal_code
+ *  postal code (post office) : code, commune_id, name, name_ar
  */
 class Algeria
 {
     public const DIVISIONS = [58, 69];
 
-    /** @var array{wilayas: array<int, array>, dairas: array<int, array>, communes: array<int, array>}|null */
+    /** @var array{wilayas: array<int, array>, dairas: array<int, array>, communes: array<int, array>, postal_codes: array<string, array>}|null */
     protected ?array $data = null;
 
     public function __construct(
@@ -100,6 +101,41 @@ class Algeria
     }
 
     /**
+     * Every postal code (one per post office), optionally only those of a commune.
+     */
+    public function postalCodes(int|string|null $commune = null): Collection
+    {
+        $codes = collect($this->data()['postal_codes']);
+
+        if ($commune !== null) {
+            $id = $this->commune($commune)['id'] ?? null;
+            $codes = $codes->where('commune_id', $id);
+        }
+
+        return $codes->values();
+    }
+
+    /**
+     * Find a postal code: postalCode('16000') or postalCode(16000) returns ['code' => '16000', 'commune_id' => ..., ...].
+     */
+    public function postalCode(int|string $code): ?array
+    {
+        $code = trim((string) $code);
+
+        return ctype_digit($code) ? ($this->data()['postal_codes'][str_pad($code, 5, '0', STR_PAD_LEFT)] ?? null) : null;
+    }
+
+    /**
+     * The commune served by a postal code.
+     */
+    public function communeByPostalCode(int|string $code): ?array
+    {
+        $postalCode = $this->postalCode($code);
+
+        return $postalCode ? $this->commune($postalCode['commune_id']) : null;
+    }
+
+    /**
      * Search communes by Latin or Arabic name, ignoring case, accents and hamza/ta marbuta variants.
      */
     public function search(string $term, int|string|null $wilaya = null): Collection
@@ -128,7 +164,7 @@ class Algeria
     }
 
     /**
-     * @return array{wilayas: array<int, array>, dairas: array<int, array>, communes: array<int, array>}
+     * @return array{wilayas: array<int, array>, dairas: array<int, array>, communes: array<int, array>, postal_codes: array<string, array>}
      */
     public function data(): array
     {
@@ -173,10 +209,16 @@ class Algeria
                 'legacy_wilaya_id' => $c['legacy_wilaya_id'],
                 'name' => $c['name'],
                 'name_ar' => $c['name_ar'],
+                'postal_code' => $c['postal_code'],
             ];
         }
 
-        return $this->data = compact('wilayas', 'dairas', 'communes');
+        $postal_codes = [];
+        foreach ($this->read('postal_codes') as $p) {
+            $postal_codes[$p['code']] = $p;
+        }
+
+        return $this->data = compact('wilayas', 'dairas', 'communes', 'postal_codes');
     }
 
     protected function read(string $file): array

@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Facade;
  * @method static Collection communes(int|string|null $wilaya = null)
  * @method static Collection communesOfDaira(int|string $daira)
  * @method static array|null commune(int|string $commune)
+ * @method static Collection postalCodes(int|string|null $commune = null)
+ * @method static array|null postalCode(int|string $code)
+ * @method static array|null communeByPostalCode(int|string $code)
  * @method static Collection search(string $term, int|string|null $wilaya = null)
  *
  * @see \Djouamaah\Algeria\Algeria

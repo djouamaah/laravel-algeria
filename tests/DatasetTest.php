@@ -6,6 +6,7 @@ use Djouamaah\Algeria\Algeria;
 use Djouamaah\Algeria\Facades\Algeria as AlgeriaFacade;
 use Djouamaah\Algeria\Rules\ValidCommune;
 use Djouamaah\Algeria\Rules\ValidDaira;
+use Djouamaah\Algeria\Rules\ValidPostalCode;
 use Djouamaah\Algeria\Rules\ValidWilaya;
 use Illuminate\Support\Facades\Validator;
 
@@ -82,6 +83,49 @@ class DatasetTest extends TestCase
         $this->assertTrue(AlgeriaFacade::search('BÉJAÏA')->contains('name', 'Bejaia'));
     }
 
+    public function test_postal_codes(): void
+    {
+        $this->assertCount(3752, AlgeriaFacade::postalCodes());
+        $this->assertCount(1505, AlgeriaFacade::communes()->whereNotNull('postal_code'));
+
+        $algerCentre = AlgeriaFacade::communeByPostalCode('16000');
+        $this->assertSame('Alger Centre', $algerCentre['name']);
+        $this->assertSame('16000', $algerCentre['postal_code']);
+        $this->assertSame($algerCentre['id'], AlgeriaFacade::postalCode(16000)['commune_id']);
+        $this->assertSame('01000', AlgeriaFacade::postalCode('1000')['code']);
+        $this->assertNull(AlgeriaFacade::postalCode('99999'));
+        $this->assertNull(AlgeriaFacade::postalCode('16 000x'));
+
+        // Bou Saâda (wilaya 68 since 2026) keeps the postal prefix of M'Sila (28).
+        $this->assertSame(68, AlgeriaFacade::communeByPostalCode('28001')['wilaya_id']);
+
+        foreach ([58, 69] as $division) {
+            $algeria = new Algeria($division);
+
+            foreach ($algeria->communes()->whereNotNull('postal_code') as $commune) {
+                $this->assertSame($commune['id'], $algeria->postalCode($commune['postal_code'])['commune_id']);
+            }
+            foreach ($algeria->postalCodes() as $postalCode) {
+                $this->assertMatchesRegularExpression('/^\d{5}$/', $postalCode['code']);
+                $this->assertNotNull($algeria->commune($postalCode['commune_id']));
+            }
+        }
+
+        $this->assertTrue(AlgeriaFacade::postalCodes($algerCentre['id'])->contains('code', '16000'));
+    }
+
+    public function test_postal_code_rule(): void
+    {
+        $algerCentre = AlgeriaFacade::communeByPostalCode('16000');
+        $passes = fn ($value, $rule) => Validator::make(['p' => $value], ['p' => [$rule]])->passes();
+
+        $this->assertTrue($passes('16000', new ValidPostalCode));
+        $this->assertTrue($passes(16000, new ValidPostalCode));
+        $this->assertFalse($passes('99999', new ValidPostalCode));
+        $this->assertTrue($passes('16000', new ValidPostalCode(commune: $algerCentre['id'])));
+        $this->assertFalse($passes('31000', new ValidPostalCode(commune: $algerCentre['id'])));
+    }
+
     public function test_validation_rules(): void
     {
         $bejaia = AlgeriaFacade::search('Bejaia', 6)->firstWhere('name', 'Bejaia');
@@ -111,5 +155,15 @@ class DatasetTest extends TestCase
         $this->getJson('/api/algeria/wilayas/16/communes?q=bab')->assertOk()->assertJsonPath('data.0.wilaya_id', 16);
         $this->getJson('/api/algeria/dairas/549/communes')->assertOk()->assertJsonCount(2, 'data');
         $this->getJson('/api/algeria/wilayas/99/dairas')->assertNotFound();
+
+        $this->getJson('/api/algeria/postal-codes/16000')->assertOk()
+            ->assertJsonPath('data.code', '16000')
+            ->assertJsonPath('data.commune.name', 'Alger Centre')
+            ->assertJsonPath('data.wilaya.id', 16);
+        $this->getJson('/api/algeria/postal-codes/99999')->assertNotFound();
+
+        $commune = AlgeriaFacade::communeByPostalCode('16000')['id'];
+        $this->getJson("/api/algeria/communes/{$commune}/postal-codes")->assertOk()
+            ->assertJsonCount(AlgeriaFacade::postalCodes($commune)->count(), 'data');
     }
 }

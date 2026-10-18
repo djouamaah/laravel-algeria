@@ -27,6 +27,7 @@ return [
         'wilayas' => 'wilayas',
         'dairas' => 'dairas',
         'communes' => 'communes',
+        'postal_codes' => 'postal_codes',
     ],
 
     /*
@@ -39,6 +40,8 @@ return [
     | GET {prefix}/wilayas/{wilaya}/dairas
     | GET {prefix}/wilayas/{wilaya}/communes
     | GET {prefix}/dairas/{daira}/communes
+    | GET {prefix}/communes/{commune}/postal-codes
+    | GET {prefix}/postal-codes/{code}
     |
     */
 

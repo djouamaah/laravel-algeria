@@ -27,8 +27,8 @@ class SeedCommand extends Command
 
         $data = $algeria->data();
         $this->components->info(sprintf(
-            'Seeded %d wilayas, %d dairas and %d communes (%d-wilaya division).',
-            count($data['wilayas']), count($data['dairas']), count($data['communes']), $algeria->division(),
+            'Seeded %d wilayas, %d dairas, %d communes and %d postal codes (%d-wilaya division).',
+            count($data['wilayas']), count($data['dairas']), count($data['communes']), count($data['postal_codes']), $algeria->division(),
         ));
 
         return self::SUCCESS;

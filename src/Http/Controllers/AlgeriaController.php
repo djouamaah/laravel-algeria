@@ -46,6 +46,28 @@ class AlgeriaController extends Controller
         return $this->respond($this->algeria->communesOfDaira($daira));
     }
 
+    public function postalCodes(string $commune): JsonResponse
+    {
+        $this->algeria->commune($commune) ?? abort(404);
+
+        return $this->respond($this->algeria->postalCodes($commune));
+    }
+
+    /**
+     * The postal code with its commune, daira and wilaya.
+     */
+    public function postalCode(string $code): JsonResponse
+    {
+        $postalCode = $this->algeria->postalCode($code) ?? abort(404);
+        $commune = $this->algeria->commune($postalCode['commune_id']);
+
+        return $this->respond($postalCode + [
+            'commune' => $commune,
+            'daira' => $this->algeria->daira($commune['daira_id']),
+            'wilaya' => $this->algeria->wilaya($commune['wilaya_id']),
+        ]);
+    }
+
     protected function respond(mixed $data): JsonResponse
     {
         return response()->json(['data' => $data], 200, [], JSON_UNESCAPED_UNICODE)

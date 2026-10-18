@@ -1,19 +1,29 @@
 """
-Builds data/wilayas.json, data/dairas.json and data/communes.json.
+Builds data/wilayas.json, data/dairas.json, data/communes.json and data/postal_codes.json.
 
-Source: tools/source-algeria-cities.json (github.com/othmanus/algeria-cities, 58 wilayas / 1541 communes),
+Sources (github.com/othmanus/algeria-cities):
+  tools/source-algeria-cities.json     58 wilayas / 1541 communes
+  tools/source-algeria-postcodes.json  post offices with their postal code, linked to commune ids
+
 then applies the 2026 territorial division (law 26-06 of 4 April 2026, presidential decree 26-206 of
 25 May 2026): 11 new wilayas (codes 59-69) carved out of existing ones, 69 wilayas in total.
 
 Usage: python -I tools/build.py   (run from the package root)
 """
+import difflib
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "tools" / "source-algeria-cities.json"
+SRC_POSTCODES = ROOT / "tools" / "source-algeria-postcodes.json"
 OUT = ROOT / "data"
+
+# Postal codes start with the wilaya number of the 1984 division (48 wilayas).
+# Wilayas created in 2019 kept the prefix of the wilaya they came from.
+POSTAL_PREFIX = {49: 1, 50: 1, 51: 7, 52: 8, 53: 11, 54: 11, 55: 30, 56: 33, 57: 39, 58: 47}
 
 # Manual corrections to the source dataset (latin names).
 LATIN_FIXES = {
@@ -55,6 +65,81 @@ def clean(value: str, latin: bool = False) -> str:
         value = re.sub(r"\s+", " ", value)
         value = LATIN_FIXES.get(value, value)
     return value
+
+
+def latin_key(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value)
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def arabic_key(value: str) -> str:
+    value = value.split(" - ")[0]  # "أدرار - القبّاضة الرّئيسيّة" -> "أدرار"
+    value = re.sub(r"[ً-ْـ]", "", value)
+    value = value.translate(str.maketrans("أإآةى", "اااهي"))
+    return re.sub(r"\s+", "", value)
+
+
+def similar(a: str, b: str) -> bool:
+    return bool(a and b) and difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def postal_codes(source: dict) -> tuple[dict, list]:
+    """
+    Returns ({commune id: main postal code}, [every post office postal code]).
+
+    The main postal code is the commune's own post office (same name), else the closest name,
+    else the lowest code among the post offices located in the commune.
+    """
+    prefix = lambda wilaya_code: POSTAL_PREFIX.get(int(wilaya_code), int(wilaya_code))
+
+    # (postal prefix, commune name) -> commune ids, to repair offices the source attached to a
+    # homonymous commune of another wilaya (e.g. "Sidi Ameur" exists in M'Sila and El Bayadh).
+    homonyms = {}
+    for commune_id, r in source.items():
+        homonyms.setdefault((prefix(r["wilaya_code"]), latin_key(r["commune_name_ascii"])), []).append(commune_id)
+
+    offices = []
+    for o in json.loads(SRC_POSTCODES.read_text(encoding="utf-8")):
+        code, commune_id = o["post_code"].strip(), o["commune_id"]
+        if not re.fullmatch(r"\d{5}", code) or commune_id not in source:
+            continue
+        if int(code[:2]) != prefix(o["wilaya_code"]):
+            match = homonyms.get((int(code[:2]), latin_key(source[commune_id]["commune_name_ascii"])), [])
+            if len(match) != 1:
+                continue  # cannot tell which commune this office belongs to
+            commune_id = match[0]
+        offices.append({
+            "code": code,
+            "commune_id": commune_id,
+            "name": clean(o["post_name_ascii"]),
+            "name_ar": clean(o["post_name"]),
+        })
+
+    by_commune = {}
+    for o in offices:
+        by_commune.setdefault(o["commune_id"], []).append(o)
+
+    main = {}
+    for commune_id, candidates in by_commune.items():
+        cl = latin_key(source[commune_id]["commune_name_ascii"])
+        ca = arabic_key(source[commune_id]["commune_name"])
+
+        def rank(o):
+            ol, oa = latin_key(o["name"]), arabic_key(o["name_ar"])
+            if o["code"].endswith("000"):
+                return 0  # main office of the wilaya, located in its chef-lieu
+            if ol == cl or oa == ca:
+                return 1
+            if similar(ol, cl) or similar(oa, ca):
+                return 2
+            if len(cl) >= 4 and (cl in ol or (len(ca) >= 4 and ca in oa)):
+                return 3
+            return 4
+
+        main[commune_id] = min(candidates, key=lambda o: (rank(o), o["code"]))["code"]
+
+    return main, sorted(offices, key=lambda o: o["code"])
 
 
 def main() -> None:
@@ -107,6 +192,7 @@ def main() -> None:
             all_dairas[key]["wilaya_id"] = code
 
     # --- communes
+    main_postal_codes, offices = postal_codes({r["id"]: r for r in rows})
     communes = []
     for r in rows:
         legacy_wilaya = int(r["wilaya_code"])
@@ -124,6 +210,7 @@ def main() -> None:
             "legacy_wilaya_id": legacy_wilaya,
             "name": name,
             "name_ar": clean(r["commune_name"]),
+            "postal_code": main_postal_codes.get(r["id"]),
         })
     communes.sort(key=lambda c: c["id"])
 
@@ -138,6 +225,7 @@ def main() -> None:
     used = {c["daira_id"] for c in communes}
     assert used == {d["id"] for d in all_dairas.values()}, "every daira must have communes"
     assert len({c["wilaya_id"] for c in communes}) == 69
+    assert len({o["code"] for o in offices}) == len(offices), "postal codes must be unique"
 
     OUT.mkdir(exist_ok=True)
     dump = lambda name, data: (OUT / name).write_text(
@@ -145,7 +233,10 @@ def main() -> None:
     dump("wilayas.json", sorted(wilayas.values(), key=lambda w: w["id"]))
     dump("dairas.json", sorted(all_dairas.values(), key=lambda d: d["id"]))
     dump("communes.json", communes)
-    print(f"wilayas={len(wilayas)} dairas={len(all_dairas)} communes={len(communes)}")
+    dump("postal_codes.json", offices)
+    with_code = sum(1 for c in communes if c["postal_code"])
+    print(f"wilayas={len(wilayas)} dairas={len(all_dairas)} communes={len(communes)} "
+          f"postal_codes={len(offices)} communes_with_postal_code={with_code}")
 
 
 if __name__ == "__main__":

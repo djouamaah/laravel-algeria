@@ -5,6 +5,7 @@ namespace Djouamaah\Algeria\Models;
 use Djouamaah\Algeria\Models\Concerns\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $legacy_wilaya_id Wilaya in the 58-wilaya division (2019).
  * @property string $name
  * @property string $name_ar
+ * @property string|null $postal_code Postal code of the commune's main post office.
  * @property-read string $localized_name
  */
 class Commune extends Model
@@ -41,6 +43,14 @@ class Commune extends Model
     public function wilaya(): BelongsTo
     {
         return $this->belongsTo(Wilaya::class);
+    }
+
+    /**
+     * Every post office postal code of the commune.
+     */
+    public function postalCodes(): HasMany
+    {
+        return $this->hasMany(PostalCode::class);
     }
 
     public function legacyWilaya(): BelongsTo
