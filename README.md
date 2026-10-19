@@ -1,5 +1,6 @@
 # Laravel Algeria — ولايات، دوائر وبلديات الجزائر
 
+[![Tests](https://github.com/djouamaah/laravel-algeria/actions/workflows/tests.yml/badge.svg)](https://github.com/djouamaah/laravel-algeria/actions/workflows/tests.yml)
 [![Latest Version](https://img.shields.io/packagist/v/djouamaah/laravel-algeria)](https://packagist.org/packages/djouamaah/laravel-algeria)
 [![Total Downloads](https://img.shields.io/packagist/dt/djouamaah/laravel-algeria)](https://packagist.org/packages/djouamaah/laravel-algeria)
 [![License](https://img.shields.io/packagist/l/djouamaah/laravel-algeria)](LICENSE)
