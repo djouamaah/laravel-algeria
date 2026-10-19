@@ -33,7 +33,7 @@ class AlgeriaSeeder extends Seeder
         DB::connection((new Wilaya)->getConnectionName())->transaction(function () use ($data) {
             $this->sync(Wilaya::query(), $data['wilayas'], ['code', 'name', 'name_ar', 'parent_id']);
             $this->sync(Daira::query(), $data['dairas'], ['wilaya_id', 'name', 'name_ar']);
-            $this->sync(Commune::query(), $data['communes'], ['daira_id', 'wilaya_id', 'legacy_wilaya_id', 'name', 'name_ar', 'postal_code']);
+            $this->sync(Commune::query(), $data['communes'], ['daira_id', 'wilaya_id', 'legacy_wilaya_id', 'name', 'name_ar', 'postal_code', 'latitude', 'longitude']);
             $this->sync(PostalCode::query(), $data['postal_codes'], ['commune_id', 'name', 'name_ar'], 'code');
 
             // PHP turns keys such as "16000" into integers; compare as strings against the char column.

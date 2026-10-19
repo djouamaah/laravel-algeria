@@ -54,6 +54,18 @@ class DatabaseTest extends TestCase
         $this->assertSame(58, Wilaya::count());
     }
 
+    public function test_coordinates_are_seeded(): void
+    {
+        $this->artisan('algeria:seed')->assertSuccessful();
+
+        $this->assertSame(0, Commune::whereNull('latitude')->orWhereNull('longitude')->count());
+
+        $oran = Commune::where('name', 'Oran')->first();
+        $this->assertIsFloat($oran->latitude);
+        $this->assertEqualsWithDelta(35.7, $oran->latitude, 0.1);
+        $this->assertLessThan(5, $oran->distanceTo(35.6971, -0.6308));
+    }
+
     public function test_seeding_is_idempotent_and_switches_division(): void
     {
         $this->artisan('algeria:seed')->assertSuccessful();

@@ -46,6 +46,20 @@ class AlgeriaController extends Controller
         return $this->respond($this->algeria->communesOfDaira($daira));
     }
 
+    /**
+     * GET communes/nearest?lat=36.7538&lng=3.0588&limit=5
+     */
+    public function nearest(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'limit' => ['nullable', 'integer', 'between:1,50'],
+        ]);
+
+        return $this->respond($this->algeria->nearest((float) $data['lat'], (float) $data['lng'], (int) ($data['limit'] ?? 1)));
+    }
+
     public function postalCodes(string $commune): JsonResponse
     {
         $this->algeria->commune($commune) ?? abort(404);

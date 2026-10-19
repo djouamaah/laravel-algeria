@@ -2,6 +2,7 @@
 
 namespace Djouamaah\Algeria\Models;
 
+use Djouamaah\Algeria\Algeria;
 use Djouamaah\Algeria\Models\Concerns\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $name_ar
  * @property string|null $postal_code Postal code of the commune's main post office.
+ * @property float|null $latitude
+ * @property float|null $longitude
  * @property-read string $localized_name
  */
 class Commune extends Model
@@ -28,6 +31,8 @@ class Commune extends Model
         'daira_id' => 'integer',
         'wilaya_id' => 'integer',
         'legacy_wilaya_id' => 'integer',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     public function getTable(): string
@@ -51,6 +56,18 @@ class Commune extends Model
     public function postalCodes(): HasMany
     {
         return $this->hasMany(PostalCode::class);
+    }
+
+    /**
+     * Distance in kilometres from this commune to a point, or null when the commune has no coordinates.
+     */
+    public function distanceTo(float $latitude, float $longitude): ?float
+    {
+        if ($this->latitude === null || $this->longitude === null) {
+            return null;
+        }
+
+        return Algeria::distance($this->latitude, $this->longitude, $latitude, $longitude);
     }
 
     public function legacyWilaya(): BelongsTo

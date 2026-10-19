@@ -11,14 +11,33 @@ then applies the 2026 territorial division (law 26-06 of 4 April 2026, president
 Usage: python -I tools/build.py   (run from the package root)
 """
 import difflib
+import functools
 import json
+import math
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "tools" / "source-algeria-cities.json"
 SRC_POSTCODES = ROOT / "tools" / "source-algeria-postcodes.json"
+SRC_WIKIDATA = ROOT / "tools" / "source-wikidata-communes.json"
+SRC_KOSSA = ROOT / "tools" / "source-kossa-communes.json"
+SRC_GEOALGERIA = ROOT / "tools" / "source-geoalgeria-communes.json"
+
+# Coordinates checked by hand where the two sources disagree: commune id -> (latitude, longitude).
+COORDINATE_OVERRIDES = {
+    1: (27.874300, -0.293900),     # Adrar (town centre)
+    623: (34.205278, 3.253056),    # Deldoul (Djelfa), not Deldoul (Adrar)
+    731: (36.458333, 5.088889),    # Tala Ifacene (Setif)
+    735: (34.761116, 0.146271),    # Ain El Hadjar (Saida), not Ain El Hadjar (Bouira)
+    741: (34.681800, 0.500264),    # Maamora (Saida), not Maamora (Bouira)
+    829: (35.112141, -0.719212),   # Sidi Khaled (Sidi Bel Abbes), Wikidata has the longitude sign wrong
+    1021: (35.144444, 3.694444),   # Menaa (M'Sila), not Menaa (Batna); from geoalgeria + OpenStreetMap
+    1154: (33.833333, 1.730556),   # Sidi Slimane (El Bayadh), not Sidi Slimane (Touggourt)
+    1235: (36.702220, 7.847220),   # Besbes (El Tarf), not Besbes (Ouled Djellal)
+}
 OUT = ROOT / "data"
 
 # Postal codes start with the wilaya number of the 1984 division (48 wilayas).
@@ -67,12 +86,14 @@ def clean(value: str, latin: bool = False) -> str:
     return value
 
 
+@functools.lru_cache(maxsize=None)
 def latin_key(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
+@functools.lru_cache(maxsize=None)
 def arabic_key(value: str) -> str:
     value = value.split(" - ")[0]  # "أدرار - القبّاضة الرّئيسيّة" -> "أدرار"
     value = re.sub(r"[ً-ْـ]", "", value)
@@ -140,6 +161,103 @@ def postal_codes(source: dict) -> tuple[dict, list]:
         main[commune_id] = min(candidates, key=lambda o: (rank(o), o["code"]))["code"]
 
     return main, sorted(offices, key=lambda o: o["code"])
+
+
+def distance_km(a, b) -> float:
+    (lat1, lon1), (lat2, lon2) = a, b
+    p = math.pi / 180
+    h = (math.sin((lat2 - lat1) * p / 2) ** 2
+         + math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lon2 - lon1) * p / 2) ** 2)
+    return 12742 * math.asin(math.sqrt(h))
+
+
+def median_point(points):
+    lats, lons = sorted(p[0] for p in points), sorted(p[1] for p in points)
+    return lats[len(lats) // 2], lons[len(lons) // 2]
+
+
+def name_score(names_latin, names_arabic, commune) -> float:
+    cl, ca = latin_key(commune["name"]), arabic_key(commune["name_ar"])
+    pairs = [(latin_key(n), cl) for n in names_latin] + [(arabic_key(n), ca) for n in names_arabic]
+    return max((ratio(a, b) for a, b in pairs if a and b), default=0.0)
+
+
+@functools.lru_cache(maxsize=None)
+def ratio(a: str, b: str) -> float:
+    if a == b:
+        return 1.0
+    matcher = difflib.SequenceMatcher(None, a, b)
+    return matcher.ratio() if matcher.real_quick_ratio() >= 0.75 and matcher.quick_ratio() >= 0.75 else 0.0
+
+
+def coordinates(communes: list) -> tuple[dict, set]:
+    """
+    Returns ({commune id: (latitude, longitude)}, {ids confirmed by two sources}).
+
+    Three sources: Wikidata (communes of Algeria, Q2989398), kossa/algerian-cities and geoalgeria.
+    A point confirmed by two sources (within 10 km) wins, Wikidata's first. Otherwise the candidate
+    closest to the other communes of the same daira wins, Wikidata first unless clearly worse.
+    COORDINATE_OVERRIDES has the final say.
+    """
+    def best_match(rows, commune, names):
+        scored = [(name_score(*names(r), commune), r) for r in rows]
+        score, best = max(scored, key=lambda s: s[0], default=(0, None))
+        return best if score >= 0.75 else None
+
+    kossa_by_wilaya, geo_by_wilaya = {}, {}
+    for k in json.loads(SRC_KOSSA.read_text(encoding="utf-8")):
+        kossa_by_wilaya.setdefault(int(k["wilaya_id"]), []).append(k)
+    for g in json.loads(SRC_GEOALGERIA.read_text(encoding="utf-8")):
+        geo_by_wilaya.setdefault(g["wilaya_code"], []).append(g)
+    wikidata = json.loads(SRC_WIKIDATA.read_text(encoding="utf-8"))
+
+    kossa, geo, candidates = {}, {}, {}
+    for c in communes:
+        k = best_match(kossa_by_wilaya[c["legacy_wilaya_id"]], c, lambda r: ([r["name"]], [r["ar_name"]]))
+        if k:
+            kossa[c["id"]] = (float(k["latitude"]), float(k["longitude"]))
+        g = best_match(geo_by_wilaya.get(c["wilaya_id"], []), c, lambda r: ([r["name"]], [r["name_ar"]]))
+        if g:
+            geo[c["id"]] = tuple(g["coord"])
+        candidates[c["id"]] = [tuple(w["coord"]) for w in wikidata if name_score(w["fr"], w["ar"], c) >= 0.85]
+
+    agreed = {}
+    for c in communes:
+        k, g = kossa.get(c["id"]), geo.get(c["id"])
+        for witness in (k, g):
+            close = [w for w in candidates[c["id"]] if witness and distance_km(witness, w) <= 10]
+            if close:
+                agreed[c["id"]] = min(close, key=lambda w: distance_km(witness, w))
+                break
+        else:
+            if k and g and distance_km(k, g) <= 10:
+                agreed[c["id"]] = k
+
+    by_daira, by_wilaya = {}, {}
+    for c in communes:
+        if c["id"] in agreed:
+            by_daira.setdefault(c["legacy_daira_id"], []).append((c["id"], agreed[c["id"]]))
+            by_wilaya.setdefault(c["legacy_wilaya_id"], []).append(agreed[c["id"]])
+
+    result = dict(agreed)
+    for c in communes:
+        if c["id"] in result:
+            continue
+        peers = [p for i, p in by_daira.get(c["legacy_daira_id"], []) if i != c["id"]]
+        ref = median_point(peers or by_wilaya[c["legacy_wilaya_id"]])
+        options = [(distance_km(ref, w), 0, w) for w in candidates[c["id"]]]
+        if c["id"] in kossa:
+            options.append((distance_km(ref, kossa[c["id"]]), 1, kossa[c["id"]]))
+        if not options:
+            continue
+        best = min(options)
+        wikidata_best = min((o for o in options if o[1] == 0), default=None)
+        chosen = wikidata_best if wikidata_best and wikidata_best[0] <= best[0] + 15 else best
+        result[c["id"]] = chosen[2]
+
+    result.update(COORDINATE_OVERRIDES)
+    rounded = {i: (round(lat, 6), round(lon, 6)) for i, (lat, lon) in result.items()}
+    return rounded, set(agreed) - set(COORDINATE_OVERRIDES)
 
 
 def main() -> None:
@@ -214,6 +332,10 @@ def main() -> None:
         })
     communes.sort(key=lambda c: c["id"])
 
+    coords, confirmed = coordinates(communes)
+    for c in communes:
+        c["latitude"], c["longitude"] = coords.get(c["id"], (None, None))
+
     # --- sanity checks
     assert len(communes) == 1541
     assert len({c["id"] for c in communes}) == 1541
@@ -237,6 +359,12 @@ def main() -> None:
     with_code = sum(1 for c in communes if c["postal_code"])
     print(f"wilayas={len(wilayas)} dairas={len(all_dairas)} communes={len(communes)} "
           f"postal_codes={len(offices)} communes_with_postal_code={with_code}")
+    print(f"coordinates={len(coords)} confirmed_by_two_sources={len(confirmed)} "
+          f"manual={len(COORDINATE_OVERRIDES)} single_source={len(coords) - len(confirmed) - len(COORDINATE_OVERRIDES)}")
+    if "--unconfirmed" in sys.argv:
+        for c in communes:
+            if c["id"] not in confirmed and c["id"] not in COORDINATE_OVERRIDES:
+                print("unconfirmed", c["id"], c["name"], c["wilaya_id"], coords.get(c["id"]))
 
 
 if __name__ == "__main__":

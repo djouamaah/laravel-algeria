@@ -114,6 +114,40 @@ class DatasetTest extends TestCase
         $this->assertTrue(AlgeriaFacade::postalCodes($algerCentre['id'])->contains('code', '16000'));
     }
 
+    public function test_coordinates(): void
+    {
+        foreach (AlgeriaFacade::communes() as $commune) {
+            $this->assertIsFloat($commune['latitude'], $commune['name']);
+            $this->assertIsFloat($commune['longitude'], $commune['name']);
+            // Algeria's bounding box
+            $this->assertTrue($commune['latitude'] > 18.9 && $commune['latitude'] < 37.2, $commune['name']);
+            $this->assertTrue($commune['longitude'] > -8.7 && $commune['longitude'] < 12.0, $commune['name']);
+        }
+
+        // homonyms resolved to the right wilaya
+        $besbes = AlgeriaFacade::communes(36)->firstWhere('name', 'Besbes');
+        $this->assertEqualsWithDelta(36.70, $besbes['latitude'], 0.05);
+        $this->assertEqualsWithDelta(7.85, $besbes['longitude'], 0.05);
+    }
+
+    public function test_nearest(): void
+    {
+        // Grande Poste, Algiers
+        $nearest = AlgeriaFacade::nearest(36.7731, 3.0589, 3);
+
+        $this->assertCount(3, $nearest);
+        $this->assertSame(16, $nearest[0]['wilaya_id']);
+        $this->assertLessThan(3, $nearest[0]['distance_km']);
+        $this->assertTrue($nearest[0]['distance_km'] <= $nearest[1]['distance_km']);
+
+        // Oran city centre
+        $this->assertSame('Oran', AlgeriaFacade::nearest(35.6971, -0.6308)->first()['name']);
+        // limited to one wilaya
+        $this->assertSame(31, AlgeriaFacade::nearest(36.7731, 3.0589, 1, 31)->first()['wilaya_id']);
+
+        $this->assertEqualsWithDelta(352, Algeria::distance(36.7731, 3.0589, 35.6971, -0.6308), 10);
+    }
+
     public function test_postal_code_rule(): void
     {
         $algerCentre = AlgeriaFacade::communeByPostalCode('16000');
@@ -161,6 +195,12 @@ class DatasetTest extends TestCase
             ->assertJsonPath('data.commune.name', 'Alger Centre')
             ->assertJsonPath('data.wilaya.id', 16);
         $this->getJson('/api/algeria/postal-codes/99999')->assertNotFound();
+
+        $this->getJson('/api/algeria/communes/nearest?lat=35.6971&lng=-0.6308&limit=2')->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.name', 'Oran');
+        $this->getJson('/api/algeria/communes/nearest?lat=120&lng=3')->assertUnprocessable();
+        $this->getJson('/api/algeria/communes/nearest')->assertUnprocessable();
 
         $commune = AlgeriaFacade::communeByPostalCode('16000')['id'];
         $this->getJson("/api/algeria/communes/{$commune}/postal-codes")->assertOk()

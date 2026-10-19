@@ -40,6 +40,7 @@ return [
     | GET {prefix}/wilayas/{wilaya}/dairas
     | GET {prefix}/wilayas/{wilaya}/communes
     | GET {prefix}/dairas/{daira}/communes
+    | GET {prefix}/communes/nearest?lat=&lng=&limit=
     | GET {prefix}/communes/{commune}/postal-codes
     | GET {prefix}/postal-codes/{code}
     |

@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### أُضيف
+- **الإحداثيات**: `latitude` و`longitude` لكل البلديات الـ 1541 (Wikidata وkossa/algerian-cities وgeoalgeria، مع تحقق متقاطع وتصحيحات يدوية).
+- Migration جديدة تضيف العمودين لجدول `communes`: شغّل `php artisan migrate` ثم `php artisan algeria:seed`.
+- `Algeria::nearest()` و`Algeria::distance()` و`Commune::distanceTo()`.
+- مسار API جديد: `GET /api/algeria/communes/nearest?lat=&lng=&limit=`.
+- ملف `THIRD-PARTY-NOTICES.md` لتراخيص مصادر البيانات.
+
 ## [1.1.0] - 2026-10-19
 
 ### أُضيف

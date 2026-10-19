@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static Collection postalCodes(int|string|null $commune = null)
  * @method static array|null postalCode(int|string $code)
  * @method static array|null communeByPostalCode(int|string $code)
+ * @method static Collection nearest(float $latitude, float $longitude, int $limit = 1, int|string|null $wilaya = null)
+ * @method static float distance(float $lat1, float $lng1, float $lat2, float $lng2)
  * @method static Collection search(string $term, int|string|null $wilaya = null)
  *
  * @see \Djouamaah\Algeria\Algeria

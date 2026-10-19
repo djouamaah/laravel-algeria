@@ -16,6 +16,7 @@
 
 - Migrations + Seeder + Eloquent Models (`Wilaya`, `Daira`, `Commune`, `PostalCode`) مع العلاقات.
 - **الرموز البريدية**: الرمز البريدي الرئيسي لكل بلدية، وجدول بـ 3752 رمزًا بريديًا (مكتب بريد) مرتبطة ببلدياتها.
+- **الإحداثيات**: خط العرض والطول لكل البلديات الـ 1541، مع البحث عن أقرب بلدية لنقطة GPS.
 - Facade `Algeria` يعمل **بدون قاعدة بيانات** (من ملفات JSON مدمجة).
 - قواعد تحقق جاهزة: `ValidWilaya`، `ValidDaira`، `ValidCommune`، `ValidPostalCode` (مع التحقق من الانتماء)، ورسائل بالعربية والفرنسية والإنجليزية.
 - API JSON اختياري للقوائم المتسلسلة (ولاية ← دائرة ← بلدية).
@@ -84,7 +85,7 @@ php artisan algeria:seed --division=69
 
 **dairas**: `id`، `wilaya_id`، `name`، `name_ar`
 
-**communes**: `id`، `daira_id`، `wilaya_id`، `legacy_wilaya_id` (الولاية في تقسيم 58)، `name`، `name_ar`، `postal_code` (الرمز البريدي الرئيسي، قد يكون `null`)
+**communes**: `id`، `daira_id`، `wilaya_id`، `legacy_wilaya_id` (الولاية في تقسيم 58)، `name`، `name_ar`، `postal_code` (الرمز البريدي الرئيسي، قد يكون `null`)، `latitude`، `longitude`
 
 **postal_codes**: `code` (مفتاح أساسي، 5 أرقام مثل `"16000"`)، `commune_id`، `name`، `name_ar` (اسم مكتب البريد)
 
@@ -121,6 +122,20 @@ $commune->postal_code;                       // "16000" (الرمز الرئيس
 $commune->postalCodes;                       // كل مكاتب البريد في البلدية
 Commune::where('postal_code', '16000')->first();
 PostalCode::find('16000')->commune->wilaya;  // من الرمز البريدي إلى البلدية والولاية
+```
+
+### الإحداثيات
+
+```php
+$oran = Commune::where('name', 'Oran')->first();
+$oran->latitude;                     // 35.696944
+$oran->longitude;                    // -0.633056
+$oran->distanceTo(36.7731, 3.0589);  // ≈ 352 كم إلى الجزائر العاصمة
+
+Algeria::nearest(36.7731, 3.0589);           // أقرب بلدية لنقطة GPS (مع distance_km)
+Algeria::nearest(36.7731, 3.0589, limit: 5); // أقرب 5 بلديات
+Algeria::nearest($lat, $lng, wilaya: 16);    // داخل ولاية واحدة
+Algeria::distance($lat1, $lng1, $lat2, $lng2); // المسافة بين نقطتين بالكيلومتر
 ```
 
 ربط نموذجك:
@@ -182,6 +197,7 @@ $request->validate([
 | `GET /api/algeria/wilayas/{wilaya}/dairas` | دوائر ولاية |
 | `GET /api/algeria/wilayas/{wilaya}/communes?q=` | بلديات ولاية (مع بحث اختياري) |
 | `GET /api/algeria/dairas/{daira}/communes` | بلديات دائرة |
+| `GET /api/algeria/communes/nearest?lat=&lng=&limit=` | أقرب البلديات لنقطة GPS |
 | `GET /api/algeria/communes/{commune}/postal-codes` | الرموز البريدية لبلدية |
 | `GET /api/algeria/postal-codes/{code}` | رمز بريدي مع بلديته ودائرته وولايته |
 
@@ -244,6 +260,13 @@ daira.onchange = async () =>
 - **1505 بلدية من 1541** لها رمز بريدي، و36 بلدية بقيمة `null` لأن المصدر لا يذكر لها أي مكتب بريد.
 - الرموز البريدية تبدأ برقم الولاية في تقسيم 1984 (48 ولاية) ولا تتغير بالتقسيم الجديد: بلديات ولاية بوسعادة (68) رموزها تبدأ بـ `28`.
 
+### الإحداثيات
+
+- ثلاثة مصادر: [Wikidata](https://www.wikidata.org) (CC0) و[kossa/algerian-cities](https://github.com/kossa/algerian-cities) و[geoalgeria](https://github.com/yasserstudio/geoalgeria) (كلاهما MIT).
+- **1518 بلدية** أكّد مصدران موقعها (فرق أقل من 10 كم)، و**9** صُحّحت يدويًا (أغلبها بلديات تحمل اسم بلدية في ولاية أخرى، مثل بسباس والمعمورة ومنعة)، و**14** من مصدر واحد بعد التحقق من قربها من بلديات دائرتها.
+- الإحداثيات تمثّل مركز البلدية تقريبيًا، ولا تمثّل حدودها.
+- تراخيص المصادر في [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 البيانات في `data/*.json` مولّدة بالسكربت:
 
 ```bash
@@ -263,6 +286,7 @@ All Algerian **wilayas (provinces), dairas (districts), communes (municipalities
 | **2026** (law 26-06, decree 26-206), default | 69 | 549 | 1541 |
 | 2019 (law 19-12) | 58 | 548 | 1541 |
 
+Every commune has a main postal code (when known) and latitude/longitude coordinates.
 Commune ids are the same in both divisions, so a stored `commune_id` stays valid if you switch.
 Supports Laravel 10–13 and PHP 8.1+.
 
@@ -317,6 +341,10 @@ $commune->postalCodes;                   // every post office of the commune
 
 PostalCode::find('16000')->commune->name;  // "Alger Centre"
 
+$commune->latitude;                      // 36.751111 (float)
+$commune->longitude;                     // 5.064167 (float)
+$commune->distanceTo(36.7731, 3.0589);   // kilometres to a point
+
 Wilaya::orderByName()->get();            // sorted by name_ar when the locale is "ar", by name otherwise
 app()->setLocale('ar');
 $wilaya->localized_name;                 // "الجزائر" ("Alger" in any other locale)
@@ -357,6 +385,11 @@ Algeria::postalCode('16000');             // ['code' => '16000', 'commune_id' =>
 Algeria::communeByPostalCode('16000');    // Alger Centre
 Algeria::postalCodes(556);                // postal codes of a commune
 
+Algeria::nearest(36.7731, 3.0589);              // the commune closest to a GPS point, with 'distance_km'
+Algeria::nearest(36.7731, 3.0589, limit: 5);    // the 5 closest communes
+Algeria::nearest($lat, $lng, wilaya: 16);       // only within one wilaya
+Algeria::distance($lat1, $lng1, $lat2, $lng2);  // great-circle distance in km
+
 Algeria::withDivision(58)->wilayas();     // the 2019 division (58 wilayas)
 ```
 
@@ -392,6 +425,7 @@ Set `ALGERIA_ROUTES=true` in `.env`. Responses are cached by the browser for one
 | `GET /api/algeria/wilayas/{wilaya}/dairas` | dairas of a wilaya |
 | `GET /api/algeria/wilayas/{wilaya}/communes?q=` | communes of a wilaya, optional search |
 | `GET /api/algeria/dairas/{daira}/communes` | communes of a daira |
+| `GET /api/algeria/communes/nearest?lat=&lng=&limit=` | closest communes to a GPS point (`limit` 1–50) |
 | `GET /api/algeria/communes/{commune}/postal-codes` | postal codes of a commune |
 | `GET /api/algeria/postal-codes/{code}` | a postal code with its commune, daira and wilaya |
 
@@ -442,6 +476,7 @@ daira.onchange = async () =>
 - Wilayas 59–69 follow presidential decree 26-206. Each one took whole dairas from its parent wilaya, except El Aricha: its communes El Aricha and El Gor were in Sebdou daira, so they form a new daira (id 549).
 - 1505 of the 1541 communes have a main postal code. The other 36 are `null` because the source lists no post office for them.
 - Postal codes keep the 1984 wilaya prefix: communes of Bou Saâda (68) still use `28xxx`.
+- Coordinates come from Wikidata (CC0), kossa/algerian-cities and geoalgeria (both MIT). 1518 communes are confirmed by two sources within 10 km, 9 were fixed by hand (mostly homonyms placed in another wilaya) and 14 come from a single source checked against the rest of their daira. They mark the approximate centre of each commune. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 - `data/*.json` is generated by `python tools/build.py`.
 
 ---

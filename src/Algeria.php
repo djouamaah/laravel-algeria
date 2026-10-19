@@ -12,7 +12,7 @@ use InvalidArgumentException;
  * Every row is a plain array:
  *  wilaya  : id, code, name, name_ar, parent_id
  *  daira   : id, wilaya_id, name, name_ar
- *  commune : id, daira_id, wilaya_id, legacy_wilaya_id, name, name_ar, postal_code
+ *  commune : id, daira_id, wilaya_id, legacy_wilaya_id, name, name_ar, postal_code, latitude, longitude
  *  postal code (post office) : code, commune_id, name, name_ar
  */
 class Algeria
@@ -136,6 +136,31 @@ class Algeria
     }
 
     /**
+     * The communes closest to a point, nearest first, each with a 'distance_km' key.
+     */
+    public function nearest(float $latitude, float $longitude, int $limit = 1, int|string|null $wilaya = null): Collection
+    {
+        return $this->communes($wilaya)
+            ->filter(fn (array $c) => $c['latitude'] !== null)
+            ->map(fn (array $c) => $c + ['distance_km' => round(static::distance($latitude, $longitude, $c['latitude'], $c['longitude']), 2)])
+            ->sortBy('distance_km')
+            ->take(max(1, $limit))
+            ->values();
+    }
+
+    /**
+     * Great-circle distance in kilometres between two points (haversine).
+     */
+    public static function distance(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $h = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return 12742 * asin(min(1, sqrt($h)));
+    }
+
+    /**
      * Search communes by Latin or Arabic name, ignoring case, accents and hamza/ta marbuta variants.
      */
     public function search(string $term, int|string|null $wilaya = null): Collection
@@ -210,6 +235,8 @@ class Algeria
                 'name' => $c['name'],
                 'name_ar' => $c['name_ar'],
                 'postal_code' => $c['postal_code'],
+                'latitude' => $c['latitude'],
+                'longitude' => $c['longitude'],
             ];
         }
 
