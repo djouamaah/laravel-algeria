@@ -5,11 +5,14 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
 ### أُضيف
 - GitHub Actions: تشغيل الاختبارات تلقائيًا على PHP 8.1–8.5 وLaravel 10–13، والتحقق من أن ملفات `data/*.json` مطابقة لما يولّده `tools/build.py`.
 - شارة حالة الاختبارات في الـ README.
 - توثيق وأمثلة استخدام بالإنجليزية في الـ README.
 - دعم PHPUnit 13 في `require-dev`.
+- ملف `CHANGELOG.md`.
 
 ## [1.0.0] - 2026-10-19
 
@@ -27,5 +30,6 @@
 - API JSON اختياري (`ALGERIA_ROUTES=true`) للقوائم المتسلسلة ولجلب البلدية من رمزها البريدي.
 - دعم Laravel 10 و11 و12 و13، وPHP 8.1 فما فوق.
 
-[Unreleased]: https://github.com/djouamaah/laravel-algeria/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/djouamaah/laravel-algeria/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/djouamaah/laravel-algeria/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/djouamaah/laravel-algeria/releases/tag/v1.0.0
