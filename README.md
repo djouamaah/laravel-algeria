@@ -1,5 +1,9 @@
 # Laravel Algeria — ولايات، دوائر وبلديات الجزائر
 
+[![Latest Version](https://img.shields.io/packagist/v/djouamaah/laravel-algeria)](https://packagist.org/packages/djouamaah/laravel-algeria)
+[![Total Downloads](https://img.shields.io/packagist/dt/djouamaah/laravel-algeria)](https://packagist.org/packages/djouamaah/laravel-algeria)
+[![License](https://img.shields.io/packagist/l/djouamaah/laravel-algeria)](LICENSE)
+
 مكتبة لارافل تضم **جميع ولايات ودوائر وبلديات الجزائر** بالعربية والحروف اللاتينية، وفق التقسيم الإقليمي الجديد لسنة 2026:
 
 | التقسيم | الولايات | الدوائر | البلديات |
@@ -21,25 +25,11 @@
 
 ## التثبيت
 
-بعد نشرها على Packagist:
-
 ```bash
 composer require djouamaah/laravel-algeria
 ```
 
-أو محليًا قبل النشر، أضف في `composer.json` الخاص بمشروعك:
-
-```json
-"repositories": [
-    { "type": "path", "url": "../laravel-algeria" }
-]
-```
-
-ثم:
-
-```bash
-composer require djouamaah/laravel-algeria:@dev
-```
+يُسجَّل الـ Service Provider والـ Facade `Algeria` تلقائيًا (Laravel package discovery).
 
 ثم أمر واحد ينشر الإعدادات وينفّذ الـ migrations ويملأ الجداول:
 

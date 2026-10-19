@@ -1,7 +1,7 @@
 {
     "name": "djouamaah/laravel-algeria",
-    "description": "All Algerian wilayas, dairas and communes (69 wilayas / 1541 communes) for Laravel: migrations, seeder, Eloquent models, validation rules and a ready-made API.",
-    "keywords": ["laravel", "algeria", "algerie", "الجزائر", "wilaya", "daira", "commune", "baladiya"],
+    "description": "All Algerian wilayas, dairas, communes and postal codes (69 wilayas / 1541 communes) for Laravel: migrations, seeder, Eloquent models, validation rules and a ready-made API.",
+    "keywords": ["laravel", "algeria", "algerie", "الجزائر", "wilaya", "daira", "commune", "baladiya", "postal code", "code postal"],
     "type": "library",
     "license": "MIT",
     "authors": [
