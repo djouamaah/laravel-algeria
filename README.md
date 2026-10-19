@@ -5,6 +5,8 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/djouamaah/laravel-algeria)](https://packagist.org/packages/djouamaah/laravel-algeria)
 [![License](https://img.shields.io/packagist/l/djouamaah/laravel-algeria)](LICENSE)
 
+**[English documentation ↓](#english)**
+
 مكتبة لارافل تضم **جميع ولايات ودوائر وبلديات الجزائر** بالعربية والحروف اللاتينية، وفق التقسيم الإقليمي الجديد لسنة 2026:
 
 | التقسيم | الولايات | الدوائر | البلديات |
@@ -249,6 +251,200 @@ python tools/build.py
 ```
 
 لتعديل أي اسم أو نقل دائرة: عدّل `tools/build.py` (أو المصدر) ثم أعد التوليد ثم `php artisan algeria:seed`.
+
+---
+
+## English
+
+All Algerian **wilayas (provinces), dairas (districts), communes (municipalities) and postal codes** for Laravel, in Arabic and Latin script.
+
+| Division | Wilayas | Dairas | Communes |
+|---|---|---|---|
+| **2026** (law 26-06, decree 26-206), default | 69 | 549 | 1541 |
+| 2019 (law 19-12) | 58 | 548 | 1541 |
+
+Commune ids are the same in both divisions, so a stored `commune_id` stays valid if you switch.
+Supports Laravel 10–13 and PHP 8.1+.
+
+### Installation
+
+```bash
+composer require djouamaah/laravel-algeria
+php artisan algeria:install
+```
+
+`algeria:install` publishes `config/algeria.php`, runs the migrations and seeds the tables.
+You can also run `php artisan migrate` and `php artisan algeria:seed` yourself, or call the seeder from your `DatabaseSeeder`:
+
+```php
+$this->call(\Djouamaah\Algeria\Database\AlgeriaSeeder::class);
+```
+
+### Configuration
+
+```dotenv
+ALGERIA_DIVISION=69   # 69 (2026, default) or 58 (2019)
+ALGERIA_ROUTES=true   # enable the JSON API (disabled by default)
+```
+
+Switch division at any time (updates rows in place, safe to re-run):
+
+```bash
+php artisan algeria:seed --division=58
+php artisan algeria:seed --division=69
+```
+
+> Switching to 58 deletes wilayas 59–69. Update any foreign keys of yours that point to them first.
+
+### Eloquent models
+
+```php
+use Djouamaah\Algeria\Models\Wilaya;
+use Djouamaah\Algeria\Models\Commune;
+use Djouamaah\Algeria\Models\PostalCode;
+
+$wilaya = Wilaya::code(16)->first();     // Alger
+$wilaya->dairas;                         // dairas of the wilaya
+$wilaya->communes;                       // communes of the wilaya
+
+Wilaya::find(68)->parent;                // M'Sila: the wilaya Bou Saâda was split from
+Wilaya::find(28)->children;              // wilayas created from M'Sila
+
+$commune = Commune::search('Bejaia')->first();
+$commune->daira->wilaya->name;           // "Béjaïa"
+$commune->postal_code;                   // "06000", main postal code (nullable)
+$commune->postalCodes;                   // every post office of the commune
+
+PostalCode::find('16000')->commune->name;  // "Alger Centre"
+
+Wilaya::orderByName()->get();            // sorted by name_ar when the locale is "ar", by name otherwise
+app()->setLocale('ar');
+$wilaya->localized_name;                 // "الجزائر" ("Alger" in any other locale)
+```
+
+Link your own model to a commune:
+
+```php
+// migration
+$table->unsignedSmallInteger('commune_id');
+$table->foreign('commune_id')->references('id')->on('communes');
+
+// App\Models\User
+public function commune()
+{
+    return $this->belongsTo(\Djouamaah\Algeria\Models\Commune::class);
+}
+```
+
+### Facade (no database needed)
+
+The `Algeria` facade reads the bundled JSON files, so it works even before you migrate. Every row is a plain array.
+
+```php
+use Djouamaah\Algeria\Facades\Algeria;
+
+Algeria::wilayas();                       // Collection of 69 wilayas
+Algeria::wilaya('16');                    // ['id' => 16, 'code' => '16', 'name' => 'Alger', 'name_ar' => 'الجزائر', 'parent_id' => null]
+Algeria::dairas(16);                      // dairas of Algiers
+Algeria::communes(16);                    // communes of Algiers
+Algeria::communesOfDaira(193);            // communes of a daira
+Algeria::commune(556);                    // Alger Centre
+
+Algeria::search('tizi');                  // ignores case, accents and hamza: 'بجاية' = 'Béjaïa' = 'bejaia'
+Algeria::search('bab', wilaya: 16);       // limited to one wilaya
+
+Algeria::postalCode('16000');             // ['code' => '16000', 'commune_id' => 556, 'name' => 'Alger', 'name_ar' => '...']
+Algeria::communeByPostalCode('16000');    // Alger Centre
+Algeria::postalCodes(556);                // postal codes of a commune
+
+Algeria::withDivision(58)->wilayas();     // the 2019 division (58 wilayas)
+```
+
+### Validation rules
+
+The rules use the bundled data (no database query) and check that each level belongs to the one above it.
+Error messages are available in English, French and Arabic.
+
+```php
+use Djouamaah\Algeria\Rules\ValidWilaya;
+use Djouamaah\Algeria\Rules\ValidDaira;
+use Djouamaah\Algeria\Rules\ValidCommune;
+use Djouamaah\Algeria\Rules\ValidPostalCode;
+
+$request->validate([
+    'wilaya_id'   => ['required', new ValidWilaya],
+    'daira_id'    => ['required', new ValidDaira($request->wilaya_id)],
+    'commune_id'  => ['required', new ValidCommune(daira: $request->daira_id)],
+    'postal_code' => ['nullable', new ValidPostalCode(commune: $request->commune_id)],
+]);
+```
+
+`ValidCommune` also accepts `wilaya:` instead of `daira:`.
+
+### JSON API
+
+Set `ALGERIA_ROUTES=true` in `.env`. Responses are cached by the browser for one day.
+
+| Route | Returns |
+|---|---|
+| `GET /api/algeria/wilayas` | all wilayas |
+| `GET /api/algeria/wilayas/{wilaya}` | one wilaya |
+| `GET /api/algeria/wilayas/{wilaya}/dairas` | dairas of a wilaya |
+| `GET /api/algeria/wilayas/{wilaya}/communes?q=` | communes of a wilaya, optional search |
+| `GET /api/algeria/dairas/{daira}/communes` | communes of a daira |
+| `GET /api/algeria/communes/{commune}/postal-codes` | postal codes of a commune |
+| `GET /api/algeria/postal-codes/{code}` | a postal code with its commune, daira and wilaya |
+
+Example: `GET /api/algeria/postal-codes/16000`
+
+```json
+{
+    "data": {
+        "code": "16000",
+        "commune_id": 556,
+        "name": "Alger",
+        "name_ar": "الجزائر - القبّاضة الرّئيسيّة",
+        "commune": { "id": 556, "daira_id": 193, "wilaya_id": 16, "legacy_wilaya_id": 16, "name": "Alger Centre", "name_ar": "الجزائر الوسطى", "postal_code": "16000" },
+        "daira": { "id": 193, "wilaya_id": 16, "name": "Sidi M'hamed", "name_ar": "سيدي امحمد" },
+        "wilaya": { "id": 16, "code": "16", "name": "Alger", "name_ar": "الجزائر", "parent_id": null }
+    }
+}
+```
+
+Cascading selects in Blade:
+
+```blade
+<select id="wilaya" name="wilaya_id">
+    @foreach (Algeria::wilayas() as $w)
+        <option value="{{ $w['id'] }}">{{ $w['code'] }} - {{ $w['name'] }}</option>
+    @endforeach
+</select>
+<select id="daira" name="daira_id"></select>
+<select id="commune" name="commune_id"></select>
+
+<script>
+const fill = (select, rows) =>
+    select.innerHTML = '<option value="">--</option>' +
+        rows.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+
+wilaya.onchange = async () => {
+    fill(daira, (await (await fetch(`/api/algeria/wilayas/${wilaya.value}/dairas`)).json()).data);
+    fill(commune, []);
+};
+daira.onchange = async () =>
+    fill(commune, (await (await fetch(`/api/algeria/dairas/${daira.value}/communes`)).json()).data);
+</script>
+```
+
+### Data notes
+
+- Base data (58 wilayas, 1541 communes) and post offices come from [othmanus/algeria-cities](https://github.com/othmanus/algeria-cities), cleaned up.
+- Wilayas 59–69 follow presidential decree 26-206. Each one took whole dairas from its parent wilaya, except El Aricha: its communes El Aricha and El Gor were in Sebdou daira, so they form a new daira (id 549).
+- 1505 of the 1541 communes have a main postal code. The other 36 are `null` because the source lists no post office for them.
+- Postal codes keep the 1984 wilaya prefix: communes of Bou Saâda (68) still use `28xxx`.
+- `data/*.json` is generated by `python tools/build.py`.
+
+---
 
 ## الاختبارات
 
