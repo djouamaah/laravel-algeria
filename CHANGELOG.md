@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-19
+
 ### أُضيف
 - **الإحداثيات**: `latitude` و`longitude` لكل البلديات الـ 1541 (Wikidata وkossa/algerian-cities وgeoalgeria، مع تحقق متقاطع وتصحيحات يدوية).
 - Migration جديدة تضيف العمودين لجدول `communes`: شغّل `php artisan migrate` ثم `php artisan algeria:seed`.
@@ -37,6 +39,7 @@
 - API JSON اختياري (`ALGERIA_ROUTES=true`) للقوائم المتسلسلة ولجلب البلدية من رمزها البريدي.
 - دعم Laravel 10 و11 و12 و13، وPHP 8.1 فما فوق.
 
-[Unreleased]: https://github.com/djouamaah/laravel-algeria/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/djouamaah/laravel-algeria/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/djouamaah/laravel-algeria/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/djouamaah/laravel-algeria/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/djouamaah/laravel-algeria/releases/tag/v1.0.0
