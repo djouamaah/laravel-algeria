@@ -50,6 +50,16 @@ jobs:
           extensions: mbstring, intl, pdo_sqlite, sqlite3
           coverage: none
 
+      # Laravel 10 and 11 are end-of-life: every release has an unpatched security advisory,
+      # so Composer refuses to install them. Allow it here, in CI only, to keep testing compatibility.
+      - name: Allow end-of-life Laravel versions
+        if: matrix.laravel == '10' || matrix.laravel == '11'
+        run: |
+          php -r '$c = json_decode(file_get_contents("composer.json"), true);
+                  $c["config"]["audit"]["block-insecure"] = false;
+                  $c["config"]["policy"]["advisories"]["block"] = false;
+                  file_put_contents("composer.json", json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));'
+
       - name: Install dependencies
         run: |
           composer require "laravel/framework:^${{ matrix.laravel }}.0" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
