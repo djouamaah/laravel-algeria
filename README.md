@@ -249,9 +249,10 @@ daira.onchange = async () =>
 ## مصدر البيانات وتحديثها
 
 - القاعدة (58 ولاية / 548 دائرة / 1541 بلدية): [othmanus/algeria-cities](https://github.com/othmanus/algeria-cities)، بعد تنظيف المسافات وتصحيح بعض الأسماء.
-- الولايات 59–69: أرقامها وأسماؤها من المرسوم الرئاسي 26-206 (الجريدة الرسمية العدد 40، 2026)، وبلدياتها من قوائم القانون 26-06. كل ولاية جديدة أخذت دوائر كاملة من ولايتها الأم.
-- **استثناء:** بلديتا العريشة والقور كانتا ضمن دائرة سبدو، فوُضعتا في دائرة جديدة «العريشة» (رقم 549) ضمن الولاية 63، وبقيت سبدو في تلمسان. راجع هذا مع نص المرسوم التنفيذي للتنظيم الإداري للولايات الجديدة عند صدوره نهائيًا.
-- إعادة توزيع الدوائر داخل الولايات الجديدة بمراسيم لاحقة (إن وُجدت) غير مدرجة بعد.
+- الولايات 59–69: أرقامها وأسماؤها من المرسوم الرئاسي 26-206 (الجريدة الرسمية العدد 40، 2026).
+- **البلديات مطابقة لنص القانون 26-06** (الجريدة الرسمية العدد 25، 5 أفريل 2026) في كل الولايات الـ 21 التي غيّرها: الولايات الـ 11 الجديدة والولايات الأم العشر. نص المواد في `tools/source-law-26-06.md`، و`tools/build.py` يتوقف إذا اختلفت أي بلدية عنه.
+- كل ولاية جديدة أخذت دوائر كاملة من ولايتها الأم، إلا العريشة: بلديتا العريشة والقور كانتا ضمن دائرة سبدو، فصارتا دائرة «العريشة» (رقم 549) إلى جانب دائرة سيدي الجيلالي، وبقيت سبدو في تلمسان.
+- الدوائر: دوائر بوسعادة مطابقة للمرسوم التنفيذي المنشور في الجريدة الرسمية العدد 52 (جويلية 2026)، ودوائر الولايات العشر الأخرى مطابقة لصفحاتها في ويكيبيديا العربية. لم أجد نص المرسوم التنفيذي كاملًا.
 
 ### الرموز البريدية
 
@@ -473,7 +474,10 @@ daira.onchange = async () =>
 ### Data notes
 
 - Base data (58 wilayas, 1541 communes) and post offices come from [othmanus/algeria-cities](https://github.com/othmanus/algeria-cities), cleaned up.
-- Wilayas 59–69 follow presidential decree 26-206. Each one took whole dairas from its parent wilaya, except El Aricha: its communes El Aricha and El Gor were in Sebdou daira, so they form a new daira (id 549).
+- Wilayas 59–69 follow presidential decree 26-206 (names, numbers, chefs-lieux).
+- Communes match the text of law 26-06 (JO n° 25, 5 April 2026) for all 21 wilayas it changed: the 11 new ones and their 10 parent wilayas. The articles are kept in `tools/source-law-26-06.md`, and `tools/build.py` fails if any commune drifts from them.
+- Each new wilaya took whole dairas from its parent, except El Aricha: its communes El Aricha and El Gor were in Sebdou daira, so they form the El Aricha daira (id 549) next to Sidi Djillali daira.
+- Dairas of Bou Saâda match the executive decree published in JO n° 52 (July 2026); dairas of the other ten new wilayas match their Arabic Wikipedia pages. The full text of that decree could not be found.
 - 1505 of the 1541 communes have a main postal code. The other 36 are `null` because the source lists no post office for them.
 - Postal codes keep the 1984 wilaya prefix: communes of Bou Saâda (68) still use `28xxx`.
 - Coordinates come from Wikidata (CC0), kossa/algerian-cities and geoalgeria (both MIT). 1518 communes are confirmed by two sources within 10 km, 9 were fixed by hand (mostly homonyms placed in another wilaya) and 14 come from a single source checked against the rest of their daira. They mark the approximate centre of each commune. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

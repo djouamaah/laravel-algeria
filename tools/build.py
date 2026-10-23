@@ -25,6 +25,7 @@ SRC_POSTCODES = ROOT / "tools" / "source-algeria-postcodes.json"
 SRC_WIKIDATA = ROOT / "tools" / "source-wikidata-communes.json"
 SRC_KOSSA = ROOT / "tools" / "source-kossa-communes.json"
 SRC_GEOALGERIA = ROOT / "tools" / "source-geoalgeria-communes.json"
+SRC_LAW = ROOT / "tools" / "source-law-26-06.md"
 
 # Coordinates checked by hand where the two sources disagree: commune id -> (latitude, longitude).
 COORDINATE_OVERRIDES = {
@@ -67,14 +68,25 @@ NEW_WILAYAS = {
     69: ("El Abiodh Sidi Cheikh", "الأبيض سيدي الشيخ", 32, ["Labiodh Sidi Cheikh", "Boussemghoun", "Chellala"]),
 }
 
-# Dairas created by the split: El Aricha and El Gor leave Sebdou daira (Tlemcen) for wilaya 63.
+# Dairas created by the split: El Aricha and El Gor leave Sebdou daira (Tlemcen) for wilaya 63,
+# as daira El Aricha next to daira Sidi Djillali.
 SPLIT_DAIRAS = {
     # (mother wilaya, old daira latin) : (new daira latin, new daira arabic, [commune latin names moved])
     (13, "Sebdou"): ("El Aricha", "العريشة", ["El Aricha", "El Gor"]),
 }
 
-# Expected commune counts per new wilaya (law 26-06 annex as reported by the press).
-EXPECTED_COMMUNES = {59: 12, 60: 8, 61: 5, 62: 4, 63: 4, 64: 6, 65: 10, 66: 8, 67: 21, 68: 23, 69: 7}
+# Law 26-06 (JO n° 25, 5 April 2026) lists the communes of every wilaya it changes: article -> wilaya.
+LAW_ARTICLES = {"7": 3, "9": 5, "11": 7, "16": 12, "17": 13, "18": 14, "21": 17, "30": 26, "32": 28, "36": 32,
+                **{f"52 bis {n}": 49 + n for n in range(10, 21)}}
+
+# Commune names spelled very differently in the law and in the dataset (latin_key form).
+LAW_ALIASES = {
+    "deuxbassins": "elhaoudane",
+    "eddouair": "tletatedouair",
+    "mezghenna": "mezerana",
+    "lemsane": "lemcene",
+    "abdelkaderazil": "azilabedelkader",
+}
 
 
 def clean(value: str, latin: bool = False) -> str:
@@ -161,6 +173,32 @@ def postal_codes(source: dict) -> tuple[dict, list]:
         main[commune_id] = min(candidates, key=lambda o: (rank(o), o["code"]))["code"]
 
     return main, sorted(offices, key=lambda o: o["code"])
+
+
+def check_law(communes: list, wilayas: dict) -> None:
+    """Every wilaya changed by law 26-06 must contain exactly the communes the law lists."""
+    text = SRC_LAW.read_text(encoding="utf-8").replace("’", "'")
+    articles = {}
+    for block in re.split(r"«\s*Art\.\s*", text)[1:]:
+        m = re.match(r"(\d+(?:\.?\s*[Bb]is\s*\d+)?)\.?\s*—\s*Les .*?\((\d+)\)\s*communes", block, re.S)
+        if m:
+            number = re.sub(r"\.?\s*[Bb]is\s*", " bis ", m.group(1)).strip()
+            articles[number] = (int(m.group(2)), re.findall(r"^\s*\d+\.\s*(.+?)\s*[;.]\s*(?:»|$)", block, re.M))
+
+    for article, code in LAW_ARTICLES.items():
+        count, names = articles[article]
+        assert len(names) == count, f"law art. {article}: parsed {len(names)} names, expected {count}"
+        pool = [c for c in communes if c["legacy_wilaya_id"] == (wilayas[code]["parent_id"] or code)]
+        expected = set()
+        for name in names:
+            key = LAW_ALIASES.get(latin_key(name), latin_key(name))
+            best = max(pool, key=lambda c: ratio(latin_key(c["name"]), key))
+            assert ratio(latin_key(best["name"]), key) >= 0.75, f"law art. {article}: no commune named {name}"
+            expected.add(best["id"])
+        actual = {c["id"] for c in communes if c["wilaya_id"] == code}
+        assert len(expected) == count and actual == expected, (
+            f"wilaya {code} differs from law art. {article}: "
+            f"missing {sorted(expected - actual)}, extra {sorted(actual - expected)}")
 
 
 def distance_km(a, b) -> float:
@@ -339,9 +377,7 @@ def main() -> None:
     # --- sanity checks
     assert len(communes) == 1541
     assert len({c["id"] for c in communes}) == 1541
-    for code, expected in EXPECTED_COMMUNES.items():
-        got = sum(1 for c in communes if c["wilaya_id"] == code)
-        assert got == expected, f"wilaya {code}: {got} communes, expected {expected}"
+    check_law(communes, wilayas)
     for (mother, old), (d, names) in split_new.items():
         assert sum(1 for c in communes if c["daira_id"] == d["id"]) == len(names)
     used = {c["daira_id"] for c in communes}
